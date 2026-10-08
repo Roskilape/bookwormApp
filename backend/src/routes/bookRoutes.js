@@ -5,34 +5,6 @@ import cloudinaryConfig from "../lib/cloudinary.js";
 
 const router = express.Router();
 
-const cloudinaryRequest = async (action, parameters) => {
-  const { cloud_name, api_key, api_secret } = cloudinaryConfig;
-  if (!cloud_name || !api_key || !api_secret) {
-    throw new Error("Cloudinary credentials are not configured");
-  }
-  const credentials = Buffer.from(`${api_key}:${api_secret}`).toString("base64");
-  const response = await fetch(
-    `https://api.cloudinary.com/v1_1/${cloud_name}/image/${action}`,
-    {
-      method: "POST",
-      headers: { Authorization: `Basic ${credentials}` },
-      body: new URLSearchParams(parameters),
-      signal: AbortSignal.timeout(30000),
-    },
-  );
-  const text = await response.text();
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error(`Cloudinary ${action} returned a non-JSON response (HTTP ${response.status})`);
-  }
-  if (!response.ok || data.error) {
-    throw new Error(data.error?.message || `Cloudinary ${action} failed: ${response.status}`);
-  }
-  return data;
-};
-
 router.post("/", protectRoute, async (req, res) => {
   try {
     const { title, caption, rating, image } = req.body;
@@ -41,12 +13,32 @@ router.post("/", protectRoute, async (req, res) => {
     }
 
     // upload image to cloudinary
-    const data = await cloudinaryRequest("upload", {
-      file: image,
-      upload_preset: "bookwarmPreset",
-    });
-    if (!data.secure_url || !data.public_id) {
-      throw new Error("Cloudinary upload response is missing image details");
+    const base64Credentials = btoa(
+      `${cloudinaryConfig.api_key}:${cloudinaryConfig.api_secret}`,
+    );
+    const uploadPreset = "bookwarmPreset";
+    const uploadResponse = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloud_name}/image/upload`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${base64Credentials}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          file: image,
+          upload_preset: uploadPreset,
+        }),
+      },
+    );
+
+    const data = await uploadResponse.json();
+
+    if (!uploadResponse.ok) {
+      throw new Error(
+        data.error?.message ||
+          `Cloudinary upload failed: ${uploadResponse.status}`,
+      );
     }
 
     const imageUrl = data.secure_url;
@@ -57,7 +49,6 @@ router.post("/", protectRoute, async (req, res) => {
       caption,
       rating,
       image: imageUrl,
-      imagePublicId: data.public_id,
       user: req.user._id,
     });
     await newBook.save();
@@ -110,6 +101,9 @@ router.get("/user", protectRoute, async (req, res) => {
 
 router.delete("/:id", protectRoute, async (req, res) => {
   try {
+    const base64Credentials = btoa(
+      `${cloudinaryConfig.api_key}:${cloudinaryConfig.api_secret}`,
+    );
     const book = await Book.findById(req.params.id);
     if (!book) {
       return res.status(404).json({ message: "Book not found" });
@@ -123,28 +117,33 @@ router.delete("/:id", protectRoute, async (req, res) => {
     }
 
     //delete image from cloudinary
-    let publicId = book.imagePublicId;
-    if (!publicId && book.image) {
-      const imageUrl = new URL(book.image);
-      if (imageUrl.hostname === "res.cloudinary.com") {
-        // Older books only stored the URL. Preserve any folders in the public ID.
-        const match = imageUrl.pathname.match(/\/image\/upload\/(?:v\d+\/)?(.+)$/);
-        if (!match) throw new Error("Cannot determine Cloudinary image public ID");
-        publicId = decodeURIComponent(match[1]).replace(/\.[^/.]+$/, "");
-      }
-    }
-    if (publicId) {
-      const result = await cloudinaryRequest("destroy", {
-        public_id: publicId,
-        invalidate: "true",
-      });
-      if (result.result !== "ok" && result.result !== "not found") {
-        throw new Error("Cloudinary did not confirm image deletion");
-      }
-    }
+    if (book.image && book.image.includes("res.cloudinary.com")) {
+      try {
+        const publicId = book.image.split("/").pop().split(".")[0];
+        const deleteResponse = await fetch(
+          `https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloud_name}/resources/image/upload/${publicId}`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Basic ${base64Credentials}`,
+            },
+          },
+        );
 
-    await book.deleteOne();
-    return res.status(200).json({ message: "Book deleted successfully" });
+        const data = deleteResponse.json();
+        if (!deleteResponse.ok) {
+          throw new Error(
+            data.error?.message ||
+              `Cloudinary upload failed: ${deleteResponse.status}`,
+          );
+        }
+      } catch (error) {
+        console.error("Error deleting image from cloudinary:", error);
+      }
+
+      await book.deleteOne();
+      res.status(200).json({ message: "Book deleted successfully" });
+    }
   } catch (error) {
     console.error("Error in delete book route:", error);
     return res.status(500).json({ message: "Internal server error" });
