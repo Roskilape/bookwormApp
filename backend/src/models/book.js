@@ -14,6 +14,9 @@ const bookSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    imagePublicId: {
+      type: String,
+    },
     rating: {
       type: Number,
       required: true,
