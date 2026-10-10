@@ -2,6 +2,7 @@ import express from "express";
 import protectRoute from "../middleware/auth.middleware.js";
 import Book from "../models/book.js";
 import cloudinaryConfig from "../lib/cloudinary.js";
+import { cloudConfig } from "../lib/cloudinary.js";
 
 const router = express.Router();
 
@@ -49,6 +50,7 @@ router.post("/", protectRoute, async (req, res) => {
       caption,
       rating,
       image: imageUrl,
+      imagePublicId: data.public_id,
       user: req.user._id,
     });
     await newBook.save();
@@ -101,9 +103,6 @@ router.get("/user", protectRoute, async (req, res) => {
 
 router.delete("/:id", protectRoute, async (req, res) => {
   try {
-    const base64Credentials = btoa(
-      `${cloudinaryConfig.api_key}:${cloudinaryConfig.api_secret}`,
-    );
     const book = await Book.findById(req.params.id);
     if (!book) {
       return res.status(404).json({ message: "Book not found" });
@@ -118,32 +117,17 @@ router.delete("/:id", protectRoute, async (req, res) => {
 
     //delete image from cloudinary
     if (book.image && book.image.includes("res.cloudinary.com")) {
-      try {
-        const publicId = book.image.split("/").pop().split(".")[0];
-        const deleteResponse = await fetch(
-          `https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloud_name}/resources/image/upload/${publicId}`,
-          {
-            method: "DELETE",
-            headers: {
-              Authorization: `Basic ${base64Credentials}`,
-            },
-          },
-        );
-
-        const data = await deleteResponse.json();
-        if (!deleteResponse.ok) {
-          throw new Error(
-            data.error?.message ||
-              `Cloudinary delete failed: ${deleteResponse.status}`,
-          );
-        }
-      } catch (error) {
-        console.error("Error deleting image from cloudinary:", error);
+      const publicId = book.imagePublicId ||
+        decodeURIComponent(new URL(book.image).pathname.split("/upload/")[1])
+          .replace(/^v\d+\//, "")
+          .replace(/\.[^/.]+$/, "");
+      const result = await cloudConfig.uploader.destroy(publicId);
+      if (result.result !== "ok" && result.result !== "not found") {
+        throw new Error("Cloudinary image deletion failed");
       }
-
-      await book.deleteOne();
-      res.status(200).json({ message: "Book deleted successfully" });
     }
+    await book.deleteOne();
+    return res.status(200).json({ message: "Book deleted successfully" });
   } catch (error) {
     console.error("Error in delete book route:", error);
     return res.status(500).json({ message: "Internal server error" });

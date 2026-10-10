@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 dotenv.config();
-
+import { v2 as cloudinary } from "cloudinary";
 const cloudinaryConfig = {
   cloud_name: process.env.CLOUDINARY_CLOUDNAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -8,3 +8,7 @@ const cloudinaryConfig = {
 };
 
 export default cloudinaryConfig;
+
+cloudinary.config(cloudinaryConfig);
+
+export const cloudConfig = cloudinary;
