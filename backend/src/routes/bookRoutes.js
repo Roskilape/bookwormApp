@@ -130,11 +130,11 @@ router.delete("/:id", protectRoute, async (req, res) => {
           },
         );
 
-        const data = deleteResponse.json();
+        const data = await deleteResponse.json();
         if (!deleteResponse.ok) {
           throw new Error(
             data.error?.message ||
-              `Cloudinary upload failed: ${deleteResponse.status}`,
+              `Cloudinary delete failed: ${deleteResponse.status}`,
           );
         }
       } catch (error) {
