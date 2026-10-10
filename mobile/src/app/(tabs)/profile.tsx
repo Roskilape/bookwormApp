@@ -30,7 +30,7 @@ export default function Profile() {
 
   const router = useRouter();
 
-  const fetchData = useCallback(async () => {
+  const fetchData = async () => {
     try {
       const response = await fetch(`${API_URL}/books/user`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -69,13 +69,13 @@ export default function Profile() {
     } finally {
       setIsLoading(false);
     }
-  }, [token]);
+  };
 
   useEffect(() => {
     // State updates follow the asynchronous network request.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
-  }, [fetchData]);
+  }, []);
 
   const handleDeleteBook = async (bookId: string) => {
     try {

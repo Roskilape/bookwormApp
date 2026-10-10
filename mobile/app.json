@@ -19,6 +19,7 @@
       },
       "predictiveBackGestureEnabled": false
     },
+
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
@@ -28,9 +29,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "backgroundColor": "#299858",
+          "image": "./assets/images/splash.png",
+          "imageWidth": 200
         }
       ],
       "expo-image",
