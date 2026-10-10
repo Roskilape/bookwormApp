@@ -4,5 +4,6 @@ node_modules/
 !.env.example
 *.log
 
-# Add the mobile app to this repository separately when ready.
-/mobile/
+# Keep local mobile tooling out of the shared repository.
+/mobile/.claude/
+/mobile-history.bundle
